@@ -75,7 +75,7 @@ Rules:
 
 ## Adding a new algorithm
 
-1. `mkdir <ALGO>/<algo>/` and add `train.py` mirroring [OPD/train.py](file:///Users/bytedance/All-In-RL/OPD/train.py)
+1. `mkdir <ALGO>/<algo>/` and add `train.py` mirroring [OPD/train.py](./OPD/train.py)
    (it inserts the repo root on `sys.path` so `rl_common` imports work when run
    as a script).
 2. `config.py`: `@dataclass class XConfig(BaseConfig)` — add **only** the fields
@@ -86,7 +86,7 @@ Rules:
 5. `train.py`: call `rl_common.cli.run(XConfig, XTrainer, project_root=..., model_fields=(...))`.
    List in `model_fields` every config field holding a model id to download
    (e.g. `("teacher_model", "student_model")`).
-6. Add a row to the root [README.md](file:///Users/bytedance/All-In-RL/README.md) table and a short `<ALGO>/README.md`.
+6. Add a row to the root [README.md](./README.md) table and a short `<ALGO>/README.md`.
 
 CLI flags are auto-generated from the config dataclass fields — do not hand-write
 `argparse` per algorithm.

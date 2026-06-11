@@ -6,6 +6,10 @@
 
 🎯 The goal of this repo is to provide minimal, self-contained, and readable implementations of representative RL / post-training algorithms, so that each method can be understood and reproduced from first principles.
 
+## 🤖 AI-Native
+
+This repository is **AI-native**: it is meant to be developed with AI coding agents. The conventions, architecture, and contribution workflow live in [AGENTS.md](./AGENTS.md), which an AI agent reads and follows to add new algorithms or modify existing ones while keeping the codebase minimal and consistent.
+
 ## 🧩 Implemented Algorithms
 
 | 🏷️ Algorithm                       | ✨ Features                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 📂 Code                                          |

@@ -1,0 +1,111 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+develop-eggs/
+downloads/
+sdist/
+wheels/
+*.whl
+pip-wheel-metadata/
+share/python-wheels/
+MANIFEST
+
+# ===== Virtual environments =====
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# ===== Testing & coverage =====
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ===== Type checkers / linters =====
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ===== Jupyter =====
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# ===== ML / experiment artifacts =====
+checkpoints/
+outputs/
+runs/
+logs/
+wandb/
+mlruns/
+lightning_logs/
+tensorboard/
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.h5
+*.npz
+*.npy
+
+# ===== HuggingFace / datasets cache =====
+.cache/
+hf_cache/
+.huggingface/
+.datasets/
+
+# ===== ModelScope cache =====
+.modelscope/
+modelscope_cache/
+ms_cache/
+modelscope/
+
+# ===== Models & datasets =====
+models/
+datasets/
+
+# ===== IDE / editors =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===== OS =====
+.DS_Store
+.AppleDouble
+.LSOverride
+ehthumbs.db
+Desktop.ini
+
+# ===== Logs / temp =====
+*.log
+*.tmp
+*.bak
+*.orig

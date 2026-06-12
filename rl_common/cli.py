@@ -2,8 +2,8 @@
 
 ``run(config_cls, trainer_cls, model_fields=...)`` builds an ``argparse`` flag
 for every config field, pre-downloads the requested models from ModelScope into
-``<algo>/models/`` and the GSM8K train/test splits into ``<algo>/datasets/``,
-then constructs the config and runs the trainer.
+``<algo>/models/`` and the dataset selected by ``cfg.dataset_recipe`` into
+``<algo>/datasets/<recipe>/``, then constructs the config and runs the trainer.
 
 Each algorithm's ``train.py`` is therefore a couple of lines: it just names its
 config class, trainer class, and which config fields hold model ids.
@@ -14,8 +14,9 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import os
-import shutil
-from typing import Sequence, Tuple, Type
+from typing import Callable, Optional, Sequence, Tuple, Type
+
+from .recipes import ensure_recipe, get_recipe
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
@@ -68,41 +69,30 @@ def ensure_model(model_id: str, models_dir: str, skip: bool = False) -> str:
     return local_dir
 
 
-GSM8K_TRAIN_URL = "https://sail-moe.oss-cn-hangzhou.aliyuncs.com/open_data/gsm8k/train.jsonl"
-GSM8K_TEST_URL = "https://sail-moe.oss-cn-hangzhou.aliyuncs.com/open_data/gsm8k/test.jsonl"
+GSM8K_RECIPE = "gsm8k"
 DEFAULT_PROMPT_FIELD = "question"
 
 
-def _download(url: str, dst: str) -> None:
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    tmp = dst + ".part"
-    print(f"[data] downloading {url}", flush=True)
-    # Use ``requests`` for certifi's CA bundle; macOS Python.framework's stdlib
-    # openssl is missing system root certs, breaking urllib over HTTPS.
-    import requests
+def ensure_dataset(
+    datasets_dir: str,
+    skip: bool = False,
+    recipe_name: str = GSM8K_RECIPE,
+    prompt_field: str = DEFAULT_PROMPT_FIELD,
+) -> Tuple[str, str]:
+    """Ensure a single recipe's train/test jsonl files exist; return their paths.
 
-    with requests.get(url, stream=True, timeout=60) as r:
-        r.raise_for_status()
-        with open(tmp, "wb") as f:
-            shutil.copyfileobj(r.raw, f)
-    os.replace(tmp, dst)
-
-
-def ensure_dataset(datasets_dir: str, skip: bool = False) -> Tuple[str, str]:
-    """Ensure GSM8K train/test jsonl files exist; return their paths."""
-    out_dir = os.path.join(datasets_dir, "gsm8k")
-    train_path = os.path.join(out_dir, "train.jsonl")
-    test_path = os.path.join(out_dir, "test.jsonl")
-
-    for path, url in ((train_path, GSM8K_TRAIN_URL), (test_path, GSM8K_TEST_URL)):
-        if os.path.exists(path):
-            print(f"[data] cached: {path}", flush=True)
-            continue
-        if skip:
-            raise FileNotFoundError(f"--skip_download set but dataset file not found at {path}")
-        _download(url, path)
-        print(f"[data] saved -> {path}", flush=True)
-
+    Defaults to GSM8K (so existing single-dataset algorithms like OPD keep
+    working unchanged), but any recipe registered in :mod:`rl_common.recipes`
+    can be requested by name.
+    """
+    paths = ensure_recipe(
+        recipe_name, datasets_dir, out_field=prompt_field, skip_download=skip
+    )
+    recipe = get_recipe(recipe_name)
+    if "train" not in paths:
+        raise RuntimeError(f"Recipe '{recipe.name}' has no train split")
+    train_path = paths["train"]
+    test_path = paths.get("test", train_path)
     return train_path, test_path
 
 
@@ -146,17 +136,43 @@ def build_arg_parser(config_cls, project_root: str) -> argparse.ArgumentParser:
     return p
 
 
+def default_dataset_setup(cfg, datasets_dir: str, skip_download: bool) -> None:
+    """Default data wiring: materialize ``cfg.dataset_recipe`` train/test splits.
+
+    Algorithms that need richer behaviour (e.g. mixing several recipes) pass a
+    custom ``dataset_hook`` to :func:`run` instead.
+    """
+    train_path, test_path = ensure_dataset(
+        datasets_dir, skip=skip_download, recipe_name=cfg.dataset_recipe
+    )
+    cfg.prompt_file = train_path
+    cfg.prompt_field = DEFAULT_PROMPT_FIELD
+    cfg.dataset_name = None
+    if not cfg.eval_file:
+        cfg.eval_file = test_path
+
+
 def run(
     config_cls: Type,
     trainer_cls: Type,
     project_root: str,
     model_fields: Sequence[str] = ("student_model",),
+    model_list_fields: Sequence[str] = (),
+    dataset_hook: Optional[Callable[[object, str, bool], None]] = None,
 ) -> None:
     """Generic CLI: parse flags, materialize models/data, build cfg, train.
 
-    ``model_fields`` lists config fields holding model ids that should be
-    downloaded locally and rewritten to point at their local directory (e.g.
-    ``("teacher_model", "student_model")`` for distillation).
+    ``model_fields`` lists config fields each holding a *single* model id to be
+    downloaded and rewritten to its local directory (e.g. ``("teacher_model",
+    "student_model")`` for distillation).
+
+    ``model_list_fields`` lists config fields each holding a *list* of model ids
+    (e.g. MOPD's ``teacher_paths``); every id is downloaded and the list is
+    rewritten in place.
+
+    ``dataset_hook(cfg, datasets_dir, skip_download)`` wires up the prompt/eval
+    files. Defaults to :func:`default_dataset_setup` (a single recipe); pass a
+    custom hook for multi-dataset mixing.
     """
     _setup_modelscope_home(project_root)
 
@@ -187,22 +203,25 @@ def run(
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(datasets_dir, exist_ok=True)
 
-    # Materialize models locally and rewrite cfg to point at the local dirs.
+    # Materialize single-id model fields and rewrite to their local dirs.
     for field_name in model_fields:
         model_id = getattr(cfg, field_name)
         local_dir = ensure_model(model_id, models_dir, skip=skip_download)
         setattr(cfg, field_name, local_dir)
+    # Materialize list-typed model fields (e.g. a pool of teachers).
+    for field_name in model_list_fields:
+        ids = getattr(cfg, field_name)
+        setattr(
+            cfg,
+            field_name,
+            [ensure_model(m, models_dir, skip=skip_download) for m in ids],
+        )
     # Tokenizer follows the student.
     cfg.tokenizer_name = cfg.student_model
     cfg.use_modelscope = False
 
-    train_path, test_path = ensure_dataset(datasets_dir, skip=skip_download)
-    cfg.prompt_file = train_path
-    cfg.prompt_field = DEFAULT_PROMPT_FIELD
-    cfg.dataset_name = None
-    if not cfg.eval_file:
-        cfg.eval_file = test_path
-    print(f"[data] train -> {train_path}")
+    (dataset_hook or default_dataset_setup)(cfg, datasets_dir, skip_download)
+    print(f"[data] train -> {cfg.prompt_file}")
     print(f"[data] eval  -> {cfg.eval_file}  (periodic eval every {cfg.eval_every} steps)")
 
     print("-" * 64)

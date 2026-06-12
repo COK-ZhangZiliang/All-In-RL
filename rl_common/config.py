@@ -36,7 +36,18 @@ class BaseConfig:
     modelscope_cache_dir: Optional[str] = None
 
     # -------------------------------------------------------------------- data
-    dataset_name: Optional[str] = None        # e.g. "AI-ModelScope/gsm8k"
+    # Prompt source resolution (see ``rl_common.data.build_prompt_dataset``)
+    # follows this priority: an explicit ``prompts=`` list > ``prompt_file`` >
+    # ``dataset_name``.
+    #
+    # The CLI (``rl_common.cli``) takes the high-level ``dataset_recipe`` route:
+    # it materializes a recipe from ``rl_common.recipes`` into a local jsonl and
+    # points ``prompt_file`` at it (clearing ``dataset_name``). The raw
+    # ``dataset_name`` / ``dataset_config`` / ``dataset_split`` fields below are
+    # the lower-level escape hatch for loading an arbitrary HF/ModelScope
+    # dataset directly from the Python API, bypassing the recipe registry.
+    dataset_recipe: str = "gsm8k"             # CLI: reusable recipe to download
+    dataset_name: Optional[str] = None        # Python API: raw HF/ModelScope id
     dataset_config: Optional[str] = "main"
     dataset_split: str = "train"
     prompt_field: str = "question"

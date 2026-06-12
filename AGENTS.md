@@ -143,8 +143,7 @@ There is no formal test suite. Before declaring a change done:
 - **Verify before committing.** Imports resolve and the offline smoke test
   passes (see *Verifying changes*).
 - **Push after committing.** Once local commits are made, attempt to push them
-  to the remote (set upstream with `git push -u origin <branch>` on first push).
-  Never force-push, and never push directly to `main`/`master`.
+  to the remote.
 - Do not commit `outputs/`, checkpoints, or `__pycache__/`.
 
 ## Environment notes

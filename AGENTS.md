@@ -134,11 +134,17 @@ There is no formal test suite. Before declaring a change done:
     `docs: add AGENTS.md`.
 - **Scope of a commit**: one logical change. Do not mix a new algorithm with
   unrelated `rl_common` refactors in the same commit.
+- **One type per commit.** Do not bundle changes of different types into a
+  single commit; split them into separate commits by category (e.g. a `feat`
+  commit, a `docs` commit, and a `refactor` commit), each with its own message.
 - **Never stage models or data.** Add files by explicit path; never
   `git add -A` / `git add .` (avoids committing `models/`, `datasets/`,
   throwaway smoke-test scripts, or local outputs).
 - **Verify before committing.** Imports resolve and the offline smoke test
   passes (see *Verifying changes*).
+- **Push after committing.** Once local commits are made, attempt to push them
+  to the remote (set upstream with `git push -u origin <branch>` on first push).
+  Never force-push, and never push directly to `main`/`master`.
 - Do not commit `outputs/`, checkpoints, or `__pycache__/`.
 
 ## Environment notes

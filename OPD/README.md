@@ -32,7 +32,7 @@ through the repo-root [`rl_common`](../rl_common) package.
 
 | File | Responsibility |
 |------|----------------|
-| `opd/config.py`   | OPD-only hyper-parameters (`teacher_model`, `kl_temperature`); the rest inherited from `rl_common.BaseConfig` |
+| `opd/config.py`   | OPD defaults: student / teacher model, dataset recipe, sampling and training shape, plus the OPD-only `kl_temperature`. Everything else is inherited from `rl_common.BaseConfig` |
 | `opd/losses.py`   | **Core**: masked per-token reverse-KL loss + vocab check |
 | `opd/trainer.py`  | Thin `OPDTrainer(BaseTrainer)`: load teacher + wire the objective |
 | `train.py`        | CLI entry point (delegates to `rl_common.cli.run`) |
@@ -46,8 +46,8 @@ loop + eval), `cli.py` (auto-generated flags + downloads).
 ## Requirements
 
 The teacher and student **must share the same tokenizer / vocabulary**
-(e.g. `Qwen2.5-3B-Instruct` → `Qwen2.5-0.5B-Instruct`). This is enforced at
-startup by `check_vocab_compatibility`.
+(default: `Qwen/Qwen2.5-7B-Instruct` → `Qwen/Qwen2.5-1.5B-Instruct`). This is
+enforced at startup by `check_vocab_compatibility`.
 
 ```bash
 pip install -r requirements.txt
@@ -55,20 +55,27 @@ pip install -r requirements.txt
 
 ## Usage
 
-Distill on a HuggingFace dataset:
+The defaults give you a Qwen2.5-7B → Qwen2.5-1.5B distillation on GSM8K:
+
+```bash
+python train.py
+```
+
+Pick a different reusable dataset recipe (registered in
+[`rl_common/recipes.py`](../rl_common/recipes.py)):
+
+```bash
+python train.py --dataset_recipe mbpp --num_train_steps 200
+```
+
+Override the models or any other config field directly — every dataclass
+field is auto-exposed as a CLI flag:
 
 ```bash
 python train.py \
     --teacher_model Qwen/Qwen2.5-3B-Instruct \
     --student_model Qwen/Qwen2.5-0.5B-Instruct \
-    --dataset_name gsm8k --dataset_config main --prompt_field question \
     --num_train_steps 500 --batch_size 4 --max_new_tokens 256
-```
-
-Distill on a local prompt file (`.txt` one-per-line, or `.jsonl`):
-
-```bash
-python train.py --prompt_file prompts.txt --num_train_steps 200
 ```
 
 Or drive it from Python with your own prompt list:

@@ -14,7 +14,12 @@ import inspect
 import os
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import (
+    AutoModel,
+    AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+)
 
 from .config import BaseConfig
 
@@ -62,11 +67,10 @@ def load_tokenizer(cfg: BaseConfig):
     return tok
 
 
-def _load_model(model_id_or_path: str, cfg: BaseConfig):
-    path = _resolve_model_path(model_id_or_path, cfg)
+def _from_pretrained_kwargs(auto_cls, cfg: BaseConfig) -> dict:
     dtype = resolve_dtype(cfg.torch_dtype)
     # transformers >=5 renamed `torch_dtype` -> `dtype`.
-    sig = inspect.signature(AutoModelForCausalLM.from_pretrained)
+    sig = inspect.signature(auto_cls.from_pretrained)
     dtype_kw = "dtype" if "dtype" in sig.parameters else "torch_dtype"
     kwargs = {
         dtype_kw: dtype,
@@ -75,6 +79,12 @@ def _load_model(model_id_or_path: str, cfg: BaseConfig):
     }
     if cfg.attn_implementation:
         kwargs["attn_implementation"] = cfg.attn_implementation
+    return kwargs
+
+
+def _load_model(model_id_or_path: str, cfg: BaseConfig):
+    path = _resolve_model_path(model_id_or_path, cfg)
+    kwargs = _from_pretrained_kwargs(AutoModelForCausalLM, cfg)
     return AutoModelForCausalLM.from_pretrained(path, **kwargs)
 
 
@@ -95,4 +105,41 @@ def load_frozen(model_id_or_path: str, cfg: BaseConfig):
     model.eval()
     for p in model.parameters():
         p.requires_grad_(False)
+    return model
+
+
+def load_reward_model(model_id_or_path: str, cfg: BaseConfig):
+    """Frozen sequence-classification reward model that scores full responses.
+
+    RLHF reward models are causal LMs with the LM head swapped for a scalar
+    regression head (``num_labels=1``); ``AutoModelForSequenceClassification``
+    loads exactly that. The forward pass returns ``logits`` of shape [B, 1] —
+    the scalar reward for each (prompt, response) sequence.
+    """
+    path = _resolve_model_path(model_id_or_path, cfg)
+    kwargs = _from_pretrained_kwargs(AutoModelForSequenceClassification, cfg)
+    kwargs["num_labels"] = 1
+    model = AutoModelForSequenceClassification.from_pretrained(path, **kwargs)
+    if model.config.pad_token_id is None:
+        model.config.pad_token_id = model.config.eos_token_id
+    model.to(cfg.device)
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad_(False)
+    return model
+
+
+def load_value_backbone(model_id_or_path: str, cfg: BaseConfig):
+    """Trainable transformer *backbone* (no LM head) for a PPO critic.
+
+    ``AutoModel`` returns last-hidden-states; the critic in
+    :mod:`ppo.value` adds a scalar value head on top. Kept trainable.
+    """
+    path = _resolve_model_path(model_id_or_path, cfg)
+    kwargs = _from_pretrained_kwargs(AutoModel, cfg)
+    model = AutoModel.from_pretrained(path, **kwargs)
+    model.to(cfg.device)
+    model.train()
+    if hasattr(model, "config"):
+        model.config.use_cache = False
     return model
